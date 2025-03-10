@@ -33,7 +33,7 @@
   let depthRange = $state({ min: 0, max: 1 });
 
   // Tweened stores for smooth motion
-  const tweenDuration = 100; // milliseconds
+  const tweenDuration = 300; // milliseconds
   const wandPosition = tweened({ x: 0, y: 0, z: 0 }, { duration: tweenDuration, easing: cubicOut });
   const wandQuaternion = tweened(
     { x: 0, y: 0, z: 0, w: 1 },
@@ -84,7 +84,7 @@
     scene.add(directionalLight);
 
     camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.01, 1000);
-    camera.position.z = 6; // what units are these?
+    camera.position.z = 6; // Center of scene at approximate arm's length when player is 1.5m away
     camera.position.y = -0.5; // Slight downward adjustment
 
     renderer = new THREE.WebGLRenderer({ alpha: true, antialias: false });

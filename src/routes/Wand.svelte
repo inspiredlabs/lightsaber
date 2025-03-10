@@ -169,19 +169,25 @@ function createWandGeometry() {
   const material = new THREE.MeshStandardMaterial({ color: 0x8B4513, roughness: 0.7, metalness: 0.2 });
   wand = new THREE.Mesh(geometry, material);
 
-  // Create green sphere with the specified parameters
+  // Create debug material: 
   const greenSphereGeometry = new THREE.SphereGeometry(0.5, 8, 8);
   const greenSphereMaterial = new THREE.MeshPhongMaterial({ 
     color: 0x00ff00,
-    transparent: true,
-    opacity: 1.0
+    visible: false  // HIDE
+    // depthWrite: false  // Prevent alpha
+    // transparent: true,
+    // opacity: 1.0  // VISIBLE
   });
-  greenSphere = new THREE.Mesh(greenSphereGeometry, greenSphereMaterial);
-  greenSphere.position.set(0, 2.5, 0); // Position at the tip of the wand
-  greenSphere.receiveShadow = true;
-  greenSphere.castShadow = true;
+  greenSphere = new THREE.Mesh(
+    greenSphereGeometry,
+    greenSphereMaterial // debug material
+  );
+  greenSphere.position.set(0, 2.5, 0); // Wand tip position
+
+  // Or, match wand size
+  // greenSphere.scale.set(0.2, 2.5, 0.2);
   
-  // Add green sphere to wand instead of gem
+  // Add green sphere
   wand.add(greenSphere);
 
   scene.add(wand);
@@ -210,9 +216,9 @@ function createRedParticles() {
     
     // Store velocities for animation
     redParticleVelocities.push({
-      x: (Math.random() - 0.5) * 0.05,  // Halved for slower movement
-      y: (Math.random() - 0.5) * 0.025, // Halved for slower movement
-      z: (Math.random() - 0.5) * 0.05   // Halved for slower movement
+      x: (Math.random() - 0.5) * 0.1,  // slower = 0.05
+      y: (Math.random() - 0.5) * 0.05, // slower = 0.025
+      z: (Math.random() - 0.5) * 0.1   // slower = 0.05
     });
     
     // Initial red color (will be overridden by shader)
@@ -221,7 +227,7 @@ function createRedParticles() {
     colors[i3 + 2] = 0.0; // B
     
     // Vary particle sizes
-    sizes[i] = 6.0; // 15? // Smaller size: `0.1 + Math.random() * 0.2`
+    sizes[i] = 10.0 + Math.random() * 0.5; // 6.0? // Smaller size: `0.1 + Math.random() * 0.2`
     
     // Initialize collision flag
     hasCollided[i] = 0; // 0 = no collision
@@ -232,8 +238,7 @@ function createRedParticles() {
   geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
   geometry.setAttribute('hasCollided', new THREE.BufferAttribute(hasCollided, 1));
   
-  // Create shader material with distance-based colors
-  // Updated shader material with improved UX
+// Distance-color shader for improved UX
 const material = new THREE.ShaderMaterial({
   uniforms: {
     time: { value: 0 },
@@ -301,29 +306,61 @@ const material = new THREE.ShaderMaterial({
         // Collided particles are always visible
         alpha = softEdgeAlpha;
       } else if (almostColliding > 0.0) {
-        // About-to-collide state - intense red/pink strobing
-        float warningPulse = 0.5 + 0.5 * sin(time * 15.0); // Even faster strobing
-        finalColor = mix(vec3(1.0, 0.0, 0.0), vec3(1.0, 0.4, 0.8), warningPulse); // Intense red to pink
-        alpha = softEdgeAlpha;
+        // ENHANCED: Super intense multi-color flashing for about-to-collide state
+        // Use multiple sine waves at different frequencies for complex flashing pattern
+        float fastStrobe1 = sin(time * 25.0); // Very fast primary strobe
+        float fastStrobe2 = sin(time * 18.0 + 1.5); // Second frequency, phase-shifted
+        float fastStrobe3 = sin(time * 30.0 + 0.8); // Third even faster frequency
+        
+        // Create a complex combined flashing effect
+        float combinedStrobe = (fastStrobe1 + fastStrobe2 + fastStrobe3) / 3.0;
+        
+        // Dramatically shift between vibrant contrasting colors
+        vec3 color1 = vec3(1.0, 0.0, 0.0);    // Bright red
+        vec3 color2 = vec3(0.0, 0.3, 1.0);    // Deep blue
+        vec3 color3 = vec3(1.0, 0.0, 1.0);    // Magenta
+        vec3 color4 = vec3(1.0, 0.8, 0.0);    // Gold
+        
+        // Complex color cycling between 4 colors
+        float colorCycle = (sin(time * 15.0) + 1.0) / 2.0; // 0 to 1 cycle
+        
+        if (colorCycle < 0.25) {
+            finalColor = mix(color1, color2, colorCycle * 4.0);
+        } else if (colorCycle < 0.5) {
+            finalColor = mix(color2, color3, (colorCycle - 0.25) * 4.0);
+        } else if (colorCycle < 0.75) {
+            finalColor = mix(color3, color4, (colorCycle - 0.5) * 4.0);
+        } else {
+            finalColor = mix(color4, color1, (colorCycle - 0.75) * 4.0);
+        }
+        
+        // Add brightness pulses for extra emphasis
+        finalColor += vec3(combinedStrobe * 0.3);
+        
+        // Make sure it's always fully visible with slight size pulsing
+        float sizeScale = 1.0 + abs(combinedStrobe) * 0.2;
+        alpha = softEdgeAlpha * sizeScale;
       } else if (proximity > 0.15) { // Lowered from 0.2 to 0.15
-        // Strobe between pink and red
+        // Strobe between pink and red        
         float strobe = 0.5 + 0.5 * sin(time * 8.0); // Faster strobing effect
         finalColor = mix(vec3(1.0, 0.0, 0.0), vec3(1.0, 0.3, 0.7), strobe); // Red to pink
         alpha = softEdgeAlpha;
       } else {
         // Distance-based color gradient
-        float normDist = clamp(vDistance / 10.0, 0.0, 1.0);
+        float normDist = clamp(vDistance / 6.0, 0.0, 1.0);
         
         // Create a smooth color transition based on distance
         if (normDist > 0.85) {
           // Make far particles completely transparent instead of blue
           finalColor = vec3(0.2, 0.2, 1.0); // Color doesn't matter since they'll be invisible
           alpha = 0.0; // Completely transparent
+
         } else if (normDist > 0.5) {
           // Mid-distance particles: make these fade in gradually
           float t = (normDist - 0.5) / 0.35;
           finalColor = vec3(0.8, 0.2, 0.8); // Pure purple
           alpha = softEdgeAlpha * (1.0 - t); // Fade in as they get closer
+          
         } else if (normDist > 0.25) {
           // Medium-close particles: red to purple gradient
           float t = (normDist - 0.25) / 0.25;
@@ -456,8 +493,8 @@ function updateRedParticles(delta = 0.016) {
         
         // Reset velocity - aim toward camera/player position
         const targetX = 0; // Center of scene
-        const targetY = 3; // Slightly above center, assuming camera is here
-        const targetZ = 0; // Center of scene
+        const targetY = -0.5; // Slightly above center, assuming camera is here
+        const targetZ = 6; // Center of scene at approximate arm's length when player is 1.5m away
 
         // Calculate direction vector from particle position to target
         const dirX = targetX - positions.array[i3];
@@ -471,7 +508,7 @@ function updateRedParticles(delta = 0.016) {
         const normalizedDirZ = dirZ / length;
 
         // Add some randomness to the direction
-        const randomFactor = 0.3; // 0 = perfect aim, 1 = completely random
+        const randomFactor = 0.6; // 0 = perfect aim, 1 = completely random
         redParticleVelocities[i] = {
           x: normalizedDirX * 0.05 * (1 - randomFactor) + (Math.random() - 0.5) * 0.05 * randomFactor,
           y: normalizedDirY * 0.05 * (1 - randomFactor) + (Math.random() - 0.5) * 0.025 * randomFactor,
